@@ -1,5 +1,5 @@
 {
-  "name": "ts-cli",
+  "name": "rpg-game",
   "version": "1.0.0",
   "description": "A TypeScript CLI application",
   "main": "dist/index.js",
@@ -7,15 +7,17 @@
     "ts-cli": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "esbuild src/index.ts --bundle --outfile=dist/index.js",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts"
+    "dev": "esbuild src/index.ts --bundle --outfile=dist/index.js --watch --servedir=.",
+    "cli": "ts-node src/cli.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^20.11.24",
+    "esbuild": "^0.19.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
