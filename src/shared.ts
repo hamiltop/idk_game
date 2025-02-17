@@ -81,13 +81,16 @@ export let playerLevel = 1;
 
 // Add animation state
 export interface AnimationState {
-    id: number;  // Add unique ID
-    type: 'sword';
+    id: number;
+    type: 'sword' | 'damage' | 'playerDamage';  // Add new animation types
     x: number;
     y: number;
     duration: number;
     startTime: number;
     symbol: string;
+    rotation?: number;
+    scale?: number;
+    color?: string;  // Add color for damage effects
 }
 
 // Change to array of animations
@@ -174,8 +177,8 @@ export const HEALTH_CONFIG = {
 
 // Add movement configuration
 export const MOVEMENT_CONFIG = {
-    BASE_SPEED: 0.1,          // Base speed (unchanged)
-    SPRINT_MULTIPLIER: 3.5,   // Increased from 2 to 3.5
+    BASE_SPEED: 0.004,        // Adjusted for deltaTime
+    SPRINT_MULTIPLIER: 3.5,   // Unchanged
     GRID_SIZE: 1
 };
 
@@ -348,14 +351,23 @@ export const MONSTER_SPEED = {
     BOSS: 0.04       // Slower but relentless
 };
 
-// Add monster state tracking
+// Update MonsterMoveState to include recoil
 interface MonsterMoveState {
     targetX: number;
     targetY: number;
     isMoving: boolean;
+    recoilDx?: number;  // Recoil direction and magnitude
+    recoilDy?: number;
+    recoilEndTime?: number;
 }
 
 const monsterStates: Map<Animal, MonsterMoveState> = new Map();
+
+// Add recoil configuration
+export const RECOIL_CONFIG = {
+    DURATION: 200,    // Recoil effect duration in ms
+    STRENGTH: 0.5     // How far they get pushed back
+};
 
 // Add collision configuration
 export const COLLISION_CONFIG = {
@@ -389,11 +401,44 @@ export function checkEnemyCollision(playerX: number, playerY: number): boolean {
     return false;
 }
 
-// Update moveAnimals to fix fox movement
+// Add configuration for minimum distance
+export const MONSTER_CONFIG = {
+    MIN_DISTANCE: 0.6,  // Minimum distance monsters must keep from player
+    ATTACK_RANGE: COLLISION_CONFIG.RADIUS  // Keep existing attack range
+};
+
+// Update moveAnimals to handle recoil
 export function moveAnimals(world: TerrainType[][], playerX: number, playerY: number, deltaTime: number) {
-    const timeScale = deltaTime / 16.67; // Normalize to 60fps
+    const timeScale = deltaTime / 16.67;
+    const now = Date.now();
 
     for (const animal of animals) {
+        // Initialize state if needed
+        if (!monsterStates.has(animal)) {
+            monsterStates.set(animal, { targetX: animal.x, targetY: animal.y, isMoving: false });
+        }
+        const state = monsterStates.get(animal)!;
+
+        // Handle recoil if active
+        if (state.recoilEndTime && now < state.recoilEndTime && state.recoilDx && state.recoilDy) {
+            const progress = (state.recoilEndTime - now) / RECOIL_CONFIG.DURATION;
+            const newX = animal.x + state.recoilDx * progress * timeScale;
+            const newY = animal.y + state.recoilDy * progress * timeScale;
+
+            // Check if new position is valid
+            const gridX = Math.floor(newX);
+            const gridY = Math.floor(newY);
+            
+            if (gridX >= 0 && gridX < world[0].length &&
+                gridY >= 0 && gridY < world.length &&
+                world[gridY][gridX] !== '🌊' &&
+                world[gridY][gridX] !== '⛰️') {
+                animal.x = newX;
+                animal.y = newY;
+            }
+            continue;  // Skip normal movement while recoiling
+        }
+
         let speed = MONSTER_SPEED.CHASE;
         if (animal.behavior === 'random') {
             speed = MONSTER_SPEED.RANDOM;
@@ -429,7 +474,7 @@ export function moveAnimals(world: TerrainType[][], playerX: number, playerY: nu
                 animal.direction = animal.direction + Math.PI;
             }
         } else {
-            // Chase movement - always move towards player
+            // Chase movement - move towards player but maintain minimum distance
             if (animal.isBoss) {
                 speed = MONSTER_SPEED.BOSS;
             }
@@ -438,23 +483,33 @@ export function moveAnimals(world: TerrainType[][], playerX: number, playerY: nu
             const dy = playerY - animal.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
-            if (distance > COLLISION_CONFIG.RADIUS) {  // Only move if not already colliding
+            // Only move if we're outside the minimum distance
+            if (distance > MONSTER_CONFIG.MIN_DISTANCE) {
+                // If we're moving closer, make sure we won't cross the minimum distance
                 const moveX = (dx / distance) * speed * timeScale;
                 const moveY = (dy / distance) * speed * timeScale;
                 
                 const newX = animal.x + moveX;
                 const newY = animal.y + moveY;
                 
-                // Check if new position is valid
-                const gridX = Math.floor(newX);
-                const gridY = Math.floor(newY);
+                // Calculate new distance after movement
+                const newDx = playerX - newX;
+                const newDy = playerY - newY;
+                const newDistance = Math.sqrt(newDx * newDx + newDy * newDy);
                 
-                if (gridX >= 0 && gridX < world[0].length &&
-                    gridY >= 0 && gridY < world.length &&
-                    world[gridY][gridX] !== '🌊' &&
-                    world[gridY][gridX] !== '⛰️') {
-                    animal.x = newX;
-                    animal.y = newY;
+                // Only apply movement if it won't violate minimum distance
+                if (newDistance >= MONSTER_CONFIG.MIN_DISTANCE) {
+                    // Check if new position is valid
+                    const gridX = Math.floor(newX);
+                    const gridY = Math.floor(newY);
+                    
+                    if (gridX >= 0 && gridX < world[0].length &&
+                        gridY >= 0 && gridY < world.length &&
+                        world[gridY][gridX] !== '🌊' &&
+                        world[gridY][gridX] !== '⛰️') {
+                        animal.x = newX;
+                        animal.y = newY;
+                    }
                 }
             }
         }
@@ -473,61 +528,117 @@ export function gainXP(amount: number, fromBoss = false) {
     }
 }
 
-// Update sword attack to be radius-based from player position
-export function startSwordAnimation(playerX: number, playerY: number) {
-    const ATTACK_POINTS = 8;  // Number of animation points around the player
-    const ATTACK_RADIUS = 1.5;  // Distance from player
-    
-    for (let i = 0; i < ATTACK_POINTS; i++) {
-        const angle = (i * 2 * Math.PI) / ATTACK_POINTS;
-        const x = playerX + Math.cos(angle) * ATTACK_RADIUS;
-        const y = playerY + Math.sin(angle) * ATTACK_RADIUS;
-        
-        const animationSymbol = ATTACK_ANIMATIONS[Math.min(playerLevel - 1, ATTACK_ANIMATIONS.length - 1)];
-        
-        currentAnimations.push({
-            id: nextAnimationId++,
-            type: 'sword',
-            x,
-            y,
-            duration: 250 + (playerLevel - 1) * 25,
-            startTime: Date.now(),
-            symbol: animationSymbol
-        });
-    }
-}
-
-// Update swordAttack to match the new animation style
-export function swordAttack(world: TerrainType[][], playerX: number, playerY: number) {
+// Update swordAttack to add recoil
+export function swordAttack(world: TerrainType[][], playerX: number, playerY: number, angle: number, attackRadius: number) {
     const totalDamage = SWORD_DAMAGE + (playerLevel - 1) * XP_CONFIG.DAMAGE_PER_LEVEL;
-    const ATTACK_RADIUS = 1.5;  // Match the animation radius
+    const ATTACK_ARC = Math.PI / 2;
 
-    // Check all monsters within attack radius
     for (let i = animals.length - 1; i >= 0; i--) {
         const target = animals[i];
         const dx = target.x - playerX;
         const dy = target.y - playerY;
         const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance <= ATTACK_RADIUS) {
-            target.health -= totalDamage;
+        
+        if (distance <= attackRadius) {
+            const targetAngle = Math.atan2(dy, dx);
+            const angleDiff = Math.abs(normalizeAngle(targetAngle - angle));
             
-            if (target.health <= 0) {
-                const enemyType = Object.values(ENEMY_TYPES).find(
-                    type => type.symbol === target.symbol
-                );
-                if (enemyType) {
-                    gainXP(enemyType.xp, target.isBoss);
+            if (angleDiff <= ATTACK_ARC / 2) {
+                // Apply damage
+                target.health -= totalDamage;
+                
+                // Add damage animation
+                currentAnimations.push({
+                    id: nextAnimationId++,
+                    type: 'damage',
+                    x: target.x,
+                    y: target.y,
+                    duration: DAMAGE_ANIMATION.DURATION,
+                    startTime: Date.now(),
+                    symbol: DAMAGE_ANIMATION.SYMBOL,
+                    color: DAMAGE_ANIMATION.MONSTER_COLOR
+                });
+
+                // Add recoil effect
+                if (!monsterStates.has(target)) {
+                    monsterStates.set(target, { targetX: target.x, targetY: target.y, isMoving: false });
                 }
-                animals.splice(i, 1);
+                const state = monsterStates.get(target)!;
+                
+                // Calculate recoil direction (normalize dx/dy and scale by strength)
+                const recoilStrength = RECOIL_CONFIG.STRENGTH * (1 + (playerLevel - 1) * 0.1); // Scale with level
+                state.recoilDx = (dx / distance) * recoilStrength;
+                state.recoilDy = (dy / distance) * recoilStrength;
+                state.recoilEndTime = Date.now() + RECOIL_CONFIG.DURATION;
+
+                if (target.health <= 0) {
+                    const enemyType = Object.values(ENEMY_TYPES).find(
+                        type => type.symbol === target.symbol
+                    );
+                    if (enemyType) {
+                        gainXP(enemyType.xp, target.isBoss);
+                    }
+                    animals.splice(i, 1);
+                    monsterStates.delete(target);
+                }
             }
         }
     }
 }
 
+// Helper function to normalize angle to [-π, π]
+function normalizeAngle(angle: number): number {
+    while (angle > Math.PI) angle -= 2 * Math.PI;
+    while (angle < -Math.PI) angle += 2 * Math.PI;
+    return angle;
+}
+
+// Update startSwordAnimation to handle scaling
+export function startSwordAnimation(x: number, y: number, duration: number, radius: number) {
+    // Clear any existing sword animations
+    currentAnimations = currentAnimations.filter(anim => anim.type !== 'sword');
+    
+    // Scale the sword emoji size with level
+    const scale = 1 + (playerLevel - 1) * 0.2;  // 20% increase per level
+    
+    currentAnimations.push({
+        id: nextAnimationId++,
+        type: 'sword',
+        x,
+        y,
+        duration: duration,
+        startTime: Date.now(),
+        symbol: '⚔️',
+        rotation: Math.atan2(y - playerPosition.y, x - playerPosition.x),
+        scale: scale  // Add scale to animation state
+    });
+}
+
+// Add damage animation configuration
+export const DAMAGE_ANIMATION = {
+    MONSTER_COLOR: '#ff0000',
+    PLAYER_COLOR: '#ff6666',
+    DURATION: 200,
+    SYMBOL: '💥'
+};
+
+// Update damagePlayer to add visual effect
 export function damagePlayer(amount: number): boolean {
     const newHealth = Math.max(0, playerHealth - amount);
-    playerHealth = newHealth;  // Ensure we set a valid number
+    playerHealth = newHealth;
+
+    // Add damage animation around player
+    currentAnimations.push({
+        id: nextAnimationId++,
+        type: 'playerDamage',
+        x: playerPosition.x,
+        y: playerPosition.y,
+        duration: DAMAGE_ANIMATION.DURATION,
+        startTime: Date.now(),
+        symbol: DAMAGE_ANIMATION.SYMBOL,
+        color: DAMAGE_ANIMATION.PLAYER_COLOR
+    });
+
     return playerHealth === 0;
 }
 
@@ -547,10 +658,9 @@ export function handleRespawns(world: TerrainType[][]) {
     const now = Date.now();
 
     // Handle food respawning
-    if (now - lastFoodSpawn > RESPAWN_CONFIG.FOOD_INTERVAL) {  // Remove the length check
+    if (now - lastFoodSpawn > RESPAWN_CONFIG.FOOD_INTERVAL) {
         if (foods.length < RESPAWN_CONFIG.FOOD_MAX) {
-            createFood(world, 1);  // Add one food item
-            console.log('Spawned food, total:', foods.length); // Debug log
+            createFood(world, 1);
         }
         lastFoodSpawn = now;
     }
@@ -564,13 +674,11 @@ export function handleRespawns(world: TerrainType[][]) {
         if (monsterCount < RESPAWN_CONFIG.MONSTER_MAX) {
             createMonsters(world, 1);
             spawned = true;
-            console.log('Spawned ogre, total monsters:', monsterCount + 1); // Debug log
         }
         
         if (foxCount < RESPAWN_CONFIG.FOX_MAX) {
             createAnimals(world, 1);
             spawned = true;
-            console.log('Spawned fox, total foxes:', foxCount + 1); // Debug log
         }
 
         if (spawned) {
@@ -594,12 +702,13 @@ export function resetGame() {
     monsterStates.clear();
 }
 
-// Update clearAnimation to remove finished animations
+// Update clearAnimation to be more precise with timing
 export function clearAnimation() {
     const now = Date.now();
-    currentAnimations = currentAnimations.filter(anim => 
-        now - anim.startTime < anim.duration
-    );
+    currentAnimations = currentAnimations.filter(anim => {
+        const elapsed = now - anim.startTime;
+        return elapsed < anim.duration;
+    });
 }
 
 // Add stamina management functions

@@ -1,83 +1,74 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>RPG Game</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game</title>
     <style>
         body {
             margin: 0;
+            padding: 0;
             display: flex;
-            justify-content: center;
-            align-items: center;
+            flex-direction: column;
             height: 100vh;
-            background: #333;
-            font-family: monospace;
+            background: #000;
+            touch-action: none;
+            overflow: hidden;
         }
-        .game-container {
+
+        #gameContainer {
+            flex: 1;
             display: flex;
-            gap: 20px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
         }
-        canvas {
-            border: 2px solid #666;
+
+        #gameCanvas {
+            background: #111;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
             image-rendering: pixelated;
         }
-        .ui-overlay {
+
+        #stats {
+            position: fixed;
+            top: 10px;
+            left: 10px;
             color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.7);
             padding: 10px;
-            background: rgba(0, 0, 0, 0.5);
             border-radius: 5px;
         }
-        .health-bar {
-            margin-bottom: 10px;
-            font-size: 18px;
-        }
-        .xp-bar {
-            margin-bottom: 10px;
-            font-size: 18px;
-        }
-        .legend {
-            font-size: 16px;
-            line-height: 1.8;
+
+        @media (max-width: 768px) {
+            #stats {
+                font-size: 12px;
+                padding: 5px;
+            }
+            
+            #gameCanvas {
+                max-height: calc(100vh - 180px);
+            }
         }
     </style>
 </head>
 <body>
-    <div class="game-container">
+    <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        <div class="ui-overlay">
-            <div class="health-bar">
-                Health: <span id="healthValue">100% (100/100)</span><br>
-                Stamina: <span id="staminaValue">100</span>%
-            </div>
-            <div class="xp-bar">
-                Level: <span id="levelValue">1</span> (<span id="rankValue">Novice</span>)<br>
-                XP: <span id="xpValue">0</span> / <span id="xpNeeded">100</span>
-            </div>
-            <div class="legend">
-                🌿 - Grass<br>
-                ⛰️ - Mountain<br>
-                🌲 - Forest<br>
-                🌊 - Water<br>
-                👤 - You<br>
-                <br>
-                <b>Enemies:</b><br>
-                🦊 - Fox (50 HP, 15 DMG) = 10 XP<br>
-                🐺 - Wolf (75 HP, 25 DMG) = 20 XP<br>
-                👹 - Ogre (100 HP, 30 DMG) = 25 XP<br>
-                🐉 - Dragon (200 HP, 40 DMG) = 50 XP<br>
-                👿 - Demon (300 HP, 50 DMG) = 75 XP<br>
-                💀 - Boss (1000 HP, 75 DMG) = 150 XP<br>
-                <br>
-                <b>Items:</b><br>
-                🍎 - Apple (+25 HP)<br>
-                ⚔️ - Press F to attack (<span id="damageValue">35</span> DMG)<br>
-                <br>
-                <b>Tips:</b><br>
-                • Level up to deal more damage!<br>
-                • Bosses have 2x HP and give 2x XP<br>
-                • New enemies appear as you level up<br>
-                • Hold Shift to sprint (uses stamina)
-            </div>
-        </div>
+    </div>
+    <div id="stats">
+        <div>Health: <span id="healthValue">100</span></div>
+        <div>Level: <span id="levelValue">1</span></div>
+        <div>Rank: <span id="rankValue">Novice</span></div>
+        <div>XP: <span id="xpValue">0</span>/<span id="xpNeeded">100</span></div>
+        <div>Damage: <span id="damageValue">35</span></div>
+        <div>Stamina: <span id="staminaValue">100</span></div>
     </div>
     <script type="module" src="dist/index.js"></script>
 </body>
