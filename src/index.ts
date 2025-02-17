@@ -77,7 +77,9 @@ class Game {
         // Update size on resize
         window.addEventListener('resize', updateCanvasSize);
         
-        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        this.isMobile = ('ontouchstart' in window) || 
+            (navigator.maxTouchPoints > 0) || 
+            /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         if (this.isMobile) {
             this.setupMobileControls();
         }
@@ -659,59 +661,91 @@ class Game {
         // Clear the canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Draw game over message
-        this.ctx.fillStyle = 'white';
-        this.ctx.font = '48px Arial';
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText('Game Over!', this.canvas.width / 2, this.canvas.height / 2);
-        
-        // Show different restart instructions based on device
-        this.ctx.font = '24px Arial';
+        // Create game over container
+        const gameOverContainer = document.createElement('div');
+        gameOverContainer.id = 'gameOverContainer';
+        document.body.appendChild(gameOverContainer);
+
+        // Create game over message
+        const gameOverMessage = document.createElement('div');
+        gameOverMessage.id = 'gameOverMessage';
+        gameOverMessage.textContent = 'Game Over!';
+        gameOverContainer.appendChild(gameOverMessage);
+
+        // Add styles
+        const style = document.createElement('style');
+        style.textContent = `
+            #gameOverContainer {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 20px;
+                background: rgba(0, 0, 0, 0.8);
+                z-index: 2000;
+            }
+
+            #gameOverMessage {
+                font-size: 48px;
+                color: white;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+                font-family: Arial, sans-serif;
+            }
+
+            #restartButton {
+                padding: 15px 30px;
+                font-size: 24px;
+                background: rgba(255, 255, 255, 0.2);
+                border: 2px solid white;
+                border-radius: 10px;
+                color: white;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+                transition: all 0.2s;
+            }
+
+            #restartButton:active {
+                background: rgba(255, 255, 255, 0.4);
+                transform: scale(0.95);
+            }
+        `;
+        document.head.appendChild(style);
+
         if (this.isMobile) {
             // Create restart button for mobile
             const restartButton = document.createElement('button');
             restartButton.id = 'restartButton';
             restartButton.textContent = '🔄 Restart';
-            document.body.appendChild(restartButton);
+            gameOverContainer.appendChild(restartButton);
 
-            // Add styles for the restart button
-            const style = document.createElement('style');
-            style.textContent = `
-                #restartButton {
-                    position: fixed;
-                    left: 50%;
-                    top: 60%;
-                    transform: translate(-50%, -50%);
-                    padding: 15px 30px;
-                    font-size: 24px;
-                    background: rgba(255, 255, 255, 0.2);
-                    border: 2px solid white;
-                    border-radius: 10px;
-                    color: white;
-                    cursor: pointer;
-                    -webkit-tap-highlight-color: transparent;
-                    transition: background-color 0.2s;
-                }
-                #restartButton:active {
-                    background: rgba(255, 255, 255, 0.4);
-                }
-            `;
-            document.head.appendChild(style);
-
-            // Add touch handler
+            // Add touch handler with click fallback
             restartButton.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                // Remove button before restart
-                restartButton.remove();
+                gameOverContainer.remove();
+                this.restart();
+            });
+            
+            // Add click handler as fallback
+            restartButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                gameOverContainer.remove();
                 this.restart();
             });
         } else {
-            this.ctx.fillText('Press R to restart', this.canvas.width / 2, this.canvas.height / 2 + 40);
-            
-            // Add keyboard handler for desktop
+            const keyboardInstructions = document.createElement('div');
+            keyboardInstructions.textContent = 'Press R to restart';
+            keyboardInstructions.style.cssText = 'color: white; font-size: 24px;';
+            gameOverContainer.appendChild(keyboardInstructions);
+
             const restartHandler = (event: KeyboardEvent) => {
                 if (event.key === 'r' || event.key === 'R') {
                     document.removeEventListener('keydown', restartHandler);
+                    gameOverContainer.remove();
                     this.restart();
                 }
             };
@@ -720,10 +754,10 @@ class Game {
     }
 
     private restart() {
-        // Remove restart button if it exists
-        const restartButton = document.getElementById('restartButton');
-        if (restartButton) {
-            restartButton.remove();
+        // Remove game over container if it exists
+        const gameOverContainer = document.getElementById('gameOverContainer');
+        if (gameOverContainer) {
+            gameOverContainer.remove();
         }
         
         this.isGameOver = false;

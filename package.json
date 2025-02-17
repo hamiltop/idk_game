@@ -9,7 +9,7 @@
   "scripts": {
     "build": "esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm && cp index.html dist/",
     "start": "npm run dev",
-    "dev": "esbuild src/index.ts --bundle --outfile=dist/index.js --watch --servedir=.",
+    "dev": "esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --watch --servedir=dist",
     "cli": "ts-node src/cli.ts"
   },
   "keywords": [],
