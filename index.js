@@ -1021,16 +1021,54 @@ var Game = class {
     this.ctx.textAlign = "center";
     this.ctx.fillText("Game Over!", this.canvas.width / 2, this.canvas.height / 2);
     this.ctx.font = "24px Arial";
-    this.ctx.fillText("Press R to restart", this.canvas.width / 2, this.canvas.height / 2 + 40);
-    const restartHandler = (event) => {
-      if (event.key === "r" || event.key === "R") {
-        document.removeEventListener("keydown", restartHandler);
+    if (this.isMobile) {
+      const restartButton = document.createElement("button");
+      restartButton.id = "restartButton";
+      restartButton.textContent = "\u{1F504} Restart";
+      document.body.appendChild(restartButton);
+      const style = document.createElement("style");
+      style.textContent = `
+                #restartButton {
+                    position: fixed;
+                    left: 50%;
+                    top: 60%;
+                    transform: translate(-50%, -50%);
+                    padding: 15px 30px;
+                    font-size: 24px;
+                    background: rgba(255, 255, 255, 0.2);
+                    border: 2px solid white;
+                    border-radius: 10px;
+                    color: white;
+                    cursor: pointer;
+                    -webkit-tap-highlight-color: transparent;
+                    transition: background-color 0.2s;
+                }
+                #restartButton:active {
+                    background: rgba(255, 255, 255, 0.4);
+                }
+            `;
+      document.head.appendChild(style);
+      restartButton.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        restartButton.remove();
         this.restart();
-      }
-    };
-    document.addEventListener("keydown", restartHandler);
+      });
+    } else {
+      this.ctx.fillText("Press R to restart", this.canvas.width / 2, this.canvas.height / 2 + 40);
+      const restartHandler = (event) => {
+        if (event.key === "r" || event.key === "R") {
+          document.removeEventListener("keydown", restartHandler);
+          this.restart();
+        }
+      };
+      document.addEventListener("keydown", restartHandler);
+    }
   }
   restart() {
+    const restartButton = document.getElementById("restartButton");
+    if (restartButton) {
+      restartButton.remove();
+    }
     this.isGameOver = false;
     resetGame();
     this.init();
