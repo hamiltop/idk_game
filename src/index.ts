@@ -149,18 +149,45 @@ class Game {
         controlsContainer.id = 'mobileControls';
         document.body.appendChild(controlsContainer);
 
-        // Create virtual joystick area as canvas
+        // Create left side controls (just joystick)
+        const leftControls = document.createElement('div');
+        leftControls.id = 'leftControls';
+        controlsContainer.appendChild(leftControls);
+
+        // Create virtual joystick area
         const joystickArea = document.createElement('canvas');
         joystickArea.id = 'joystickArea';
         joystickArea.width = 150;
         joystickArea.height = 150;
-        controlsContainer.appendChild(joystickArea);
+        leftControls.appendChild(joystickArea);
+
+        // Create right side controls (attack, sprint, and help)
+        const rightControls = document.createElement('div');
+        rightControls.id = 'rightControls';
+        controlsContainer.appendChild(rightControls);
+
+        // Create action buttons container
+        const actionButtons = document.createElement('div');
+        actionButtons.id = 'actionButtons';
+        rightControls.appendChild(actionButtons);
 
         // Create attack button
         this.attackButton = document.createElement('button');
         this.attackButton.id = 'attackButton';
         this.attackButton.textContent = '⚔️';
-        controlsContainer.appendChild(this.attackButton);
+        actionButtons.appendChild(this.attackButton);
+
+        // Create sprint button
+        const sprintButton = document.createElement('button');
+        sprintButton.id = 'sprintButton';
+        sprintButton.textContent = '🏃';
+        actionButtons.appendChild(sprintButton);
+
+        // Create help button
+        const helpButton = document.createElement('button');
+        helpButton.id = 'helpButton';
+        helpButton.textContent = '❔';
+        rightControls.appendChild(helpButton);
 
         // Add styles
         const style = document.createElement('style');
@@ -173,10 +200,27 @@ class Game {
                 height: 150px;
                 display: flex;
                 justify-content: space-between;
-                align-items: center;
+                align-items: flex-end;
                 padding: 0 20px;
                 pointer-events: none;
                 z-index: 1000;
+            }
+
+            #leftControls {
+                pointer-events: auto;
+            }
+
+            #rightControls {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                pointer-events: auto;
+            }
+
+            #actionButtons {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 10px;
             }
 
             #joystickArea {
@@ -184,27 +228,141 @@ class Game {
                 height: 150px;
                 background: rgba(255, 255, 255, 0.1);
                 border-radius: 50%;
-                pointer-events: auto;
                 touch-action: none;
             }
 
-            #attackButton {
-                width: 80px;
-                height: 80px;
-                background: rgba(255, 0, 0, 0.3);
-                border: 2px solid rgba(255, 0, 0, 0.5);
+            .mobile-button {
+                width: 60px;
+                height: 60px;
                 border-radius: 50%;
-                font-size: 32px;
-                pointer-events: auto;
-                padding: 0;
+                font-size: 24px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 cursor: pointer;
                 -webkit-tap-highlight-color: transparent;
+                transition: all 0.2s;
+                border: 2px solid rgba(255, 255, 255, 0.5);
+            }
+
+            #attackButton {
+                background: rgba(255, 0, 0, 0.3);
+                border-color: rgba(255, 0, 0, 0.5);
+            }
+
+            #sprintButton {
+                background: rgba(255, 255, 0, 0.3);
+                border-color: rgba(255, 255, 0, 0.5);
+            }
+
+            #helpButton {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+                background: rgba(100, 149, 237, 0.3);
+                border-color: rgba(100, 149, 237, 0.5);
+                align-self: flex-end;
+            }
+
+            .mobile-button:active {
+                transform: scale(0.9);
+            }
+
+            .mobile-button.active {
+                background-color: rgba(255, 255, 255, 0.4);
+            }
+
+            #helpOverlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.9);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                z-index: 3000;
+                color: white;
+                font-family: Arial, sans-serif;
+                overflow: hidden;  /* Prevent body scroll */
+            }
+
+            #helpContent {
+                flex: 1;
+                width: 100%;
+                max-width: 600px;
+                text-align: center;
+                padding: 20px;
+                overflow-y: auto;  /* Enable scrolling */
+                -webkit-overflow-scrolling: touch;  /* Smooth scroll on iOS */
+            }
+
+            #helpContent h2 {
+                font-size: 32px;
+                margin-bottom: 20px;
+                color: #ffd700;
+            }
+
+            #helpContent h3 {
+                font-size: 24px;
+                margin: 15px 0;
+                color: #ffd700;
+            }
+
+            #helpContent p {
+                margin: 10px 0;
+                font-size: 18px;
+            }
+
+            #closeHelp {
+                margin: 20px;  /* Add margin instead of margin-top */
+                padding: 10px 20px;
+                background: rgba(255, 255, 255, 0.2);
+                border: 2px solid white;
+                color: white;
+                border-radius: 5px;
+                font-size: 18px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+
+            #closeHelp:active {
+                background: rgba(255, 255, 255, 0.4);
+                transform: scale(0.95);
             }
         `;
         document.head.appendChild(style);
+
+        // Add common button class
+        [this.attackButton, sprintButton, helpButton].forEach(btn => {
+            btn.classList.add('mobile-button');
+        });
+
+        // Add sprint handlers
+        sprintButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.isSprinting = true;
+            sprintButton.classList.add('active');
+        });
+
+        sprintButton.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.isSprinting = false;
+            sprintButton.classList.remove('active');
+        });
+
+        // Add help handler
+        helpButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.showHelp();
+        });
+
+        // Also add click handler for better compatibility
+        helpButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.showHelp();
+        });
 
         // Add touch event listeners
         joystickArea.addEventListener('touchstart', this.handleTouchStart.bind(this));
@@ -763,6 +921,48 @@ class Game {
         this.isGameOver = false;
         resetGame();
         this.init();
+    }
+
+    private showHelp() {
+        const helpOverlay = document.createElement('div');
+        helpOverlay.id = 'helpOverlay';
+
+        const helpContent = document.createElement('div');
+        helpContent.id = 'helpContent';
+        helpContent.innerHTML = `
+            <h2>How to Play</h2>
+            <p>🧙 You are a wizard in a dangerous world!</p>
+            <p>⚔️ Attack monsters to gain XP and level up</p>
+            <p>🍎 Collect apples to heal</p>
+            <p>🏃 Hold sprint to move faster (uses stamina)</p>
+            <br>
+            <h3>Controls</h3>
+            <p>Left side: Virtual joystick for movement</p>
+            <p>Right side: Attack (⚔️) and Sprint (🏃) buttons</p>
+            <br>
+            <h3>Enemies:</h3>
+            <p>🦊 Fox (50 HP, 15 DMG) = 10 XP</p>
+            <p>🐺 Wolf (75 HP, 25 DMG) = 20 XP</p>
+            <p>👹 Ogre (100 HP, 30 DMG) = 25 XP</p>
+            <p>🐉 Dragon (200 HP, 40 DMG) = 50 XP</p>
+            <p>👿 Demon (300 HP, 50 DMG) = 75 XP</p>
+            <p>💀 Boss (500 HP, 75 DMG) = 150 XP</p>
+        `;
+
+        const closeButton = document.createElement('button');
+        closeButton.id = 'closeHelp';
+        closeButton.textContent = 'Close';
+
+        // Add both touch and click handlers for the close button
+        closeButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            helpOverlay.remove();
+        });
+        closeButton.addEventListener('click', () => helpOverlay.remove());
+
+        helpOverlay.appendChild(helpContent);
+        helpOverlay.appendChild(closeButton);
+        document.body.appendChild(helpOverlay);
     }
 }
 
