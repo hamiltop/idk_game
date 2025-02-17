@@ -4,6 +4,7 @@ export type TerrainType = '🌿' | '⛰️' | '🌲' | '🌊';
 export interface Tile {
     type: TerrainType;
     symbol: string;
+    backgroundColor: string;
 }
 
 export interface Animal {
@@ -14,6 +15,7 @@ export interface Animal {
     health: number;
     damage: number;
     isBoss?: boolean;
+    direction?: number;  // Add direction for random movement
 }
 
 export interface Food {
@@ -24,10 +26,10 @@ export interface Food {
 }
 
 export const TERRAIN_TYPES: Record<TerrainType, Tile> = {
-    '🌿': { type: '🌿', symbol: '🌿' },
-    '⛰️': { type: '⛰️', symbol: '⛰️' },
-    '🌲': { type: '🌲', symbol: '🌲' },
-    '🌊': { type: '🌊', symbol: '🌊' }
+    '🌿': { type: '🌿', symbol: '🌿', backgroundColor: '#3B7A23' },  // Natural grass green
+    '⛰️': { type: '⛰️', symbol: '⛰️', backgroundColor: '#A0522D' },  // Brown
+    '🌲': { type: '🌲', symbol: '🌲', backgroundColor: '#1B4D1B' },  // Darker forest green
+    '🌊': { type: '🌊', symbol: '🌊', backgroundColor: '#4169E1' }   // Royal blue
 };
 
 export const MONSTER_DAMAGE = 20;
@@ -159,8 +161,8 @@ export const ENEMY_TYPES = {
 };
 
 export const STAMINA_CONFIG = {
-    SPRINT_COST: 20,      // Cost per move while sprinting
-    REGEN_RATE: 5,        // Amount regenerated per frame when not sprinting
+    SPRINT_COST: 30,          // Reduced from 40 to 30 per second
+    REGEN_RATE: 0.8,          // Increased from 0.5 to 0.8 per frame
     MAX_STAMINA: 100
 };
 
@@ -169,6 +171,36 @@ export const HEALTH_CONFIG = {
     BASE_HEALTH: 100,
     HEALTH_PER_LEVEL: 25,  // +25 HP per level
 };
+
+// Add movement configuration
+export const MOVEMENT_CONFIG = {
+    BASE_SPEED: 0.1,          // Base speed (unchanged)
+    SPRINT_MULTIPLIER: 3.5,   // Increased from 2 to 3.5
+    GRID_SIZE: 1
+};
+
+// Add player position with sub-grid precision
+export interface PlayerPosition {
+    x: number;
+    y: number;
+}
+
+export let playerPosition: PlayerPosition = {
+    x: 0,
+    y: 0
+};
+
+// Add setter for player position
+export function setPlayerPosition(x: number, y: number) {
+    playerPosition.x = x;
+    playerPosition.y = y;
+}
+
+// Add function to update player position with deltas
+export function movePlayer(dx: number, dy: number) {
+    playerPosition.x += dx;
+    playerPosition.y += dy;
+}
 
 export function generateWorld(width: number, height: number): TerrainType[][] {
     const world: TerrainType[][] = [];
@@ -309,46 +341,121 @@ export function createFood(world: TerrainType[][], count: number) {
     }
 }
 
-export function moveAnimals(world: TerrainType[][], playerX: number, playerY: number) {
-    for (const animal of animals) {
-        if (animal.behavior === 'random' && Math.random() < 0.5) {
-            const direction = Math.floor(Math.random() * 4);
-            let newX = animal.x;
-            let newY = animal.y;
+// Add monster speed configuration
+export const MONSTER_SPEED = {
+    RANDOM: 0.03,    // Very slow wandering
+    CHASE: 0.06,     // Regular chase speed
+    BOSS: 0.04       // Slower but relentless
+};
 
-            switch (direction) {
-                case 0: newY--; break;
-                case 1: newY++; break;
-                case 2: newX--; break;
-                case 3: newX++; break;
+// Add monster state tracking
+interface MonsterMoveState {
+    targetX: number;
+    targetY: number;
+    isMoving: boolean;
+}
+
+const monsterStates: Map<Animal, MonsterMoveState> = new Map();
+
+// Add collision configuration
+export const COLLISION_CONFIG = {
+    RADIUS: 0.4  // Collision radius (in grid units)
+};
+
+// Add damage cooldown configuration
+export const DAMAGE_CONFIG = {
+    COOLDOWN: 500,  // Milliseconds between damage hits
+    LAST_HIT: 0     // Track last damage time
+};
+
+// Update collision check to respect cooldown
+export function checkEnemyCollision(playerX: number, playerY: number): boolean {
+    const now = Date.now();
+    if (now - DAMAGE_CONFIG.LAST_HIT < DAMAGE_CONFIG.COOLDOWN) {
+        return false;  // Still in cooldown
+    }
+
+    const collidingAnimal = animals.find(animal => {
+        const dx = animal.x - playerX;
+        const dy = animal.y - playerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < COLLISION_CONFIG.RADIUS;
+    });
+    
+    if (collidingAnimal) {
+        DAMAGE_CONFIG.LAST_HIT = now;
+        return damagePlayer(collidingAnimal.damage);
+    }
+    return false;
+}
+
+// Update moveAnimals to fix fox movement
+export function moveAnimals(world: TerrainType[][], playerX: number, playerY: number, deltaTime: number) {
+    const timeScale = deltaTime / 16.67; // Normalize to 60fps
+
+    for (const animal of animals) {
+        let speed = MONSTER_SPEED.CHASE;
+        if (animal.behavior === 'random') {
+            speed = MONSTER_SPEED.RANDOM;
+            
+            // Always move foxes in their current direction
+            if (!animal.direction) {
+                animal.direction = Math.random() * Math.PI * 2;
+            }
+            
+            // Change direction occasionally
+            if (Math.random() < 0.02) {
+                animal.direction = Math.random() * Math.PI * 2;
             }
 
-            if (newX >= 0 && newX < world[0].length &&
-                newY >= 0 && newY < world.length &&
-                world[newY][newX] !== '🌊' &&
-                world[newY][newX] !== '⛰️') {
+            const dx = Math.cos(animal.direction);
+            const dy = Math.sin(animal.direction);
+            
+            const newX = animal.x + dx * speed * timeScale;
+            const newY = animal.y + dy * speed * timeScale;
+            
+            // Check if new position is valid
+            const gridX = Math.floor(newX);
+            const gridY = Math.floor(newY);
+            
+            if (gridX >= 0 && gridX < world[0].length &&
+                gridY >= 0 && gridY < world.length &&
+                world[gridY][gridX] !== '🌊' &&
+                world[gridY][gridX] !== '⛰️') {
                 animal.x = newX;
                 animal.y = newY;
+            } else {
+                // If hitting a wall, reverse direction
+                animal.direction = animal.direction + Math.PI;
             }
-        } else if (animal.behavior === 'chase') {
+        } else {
+            // Chase movement - always move towards player
+            if (animal.isBoss) {
+                speed = MONSTER_SPEED.BOSS;
+            }
+            
             const dx = playerX - animal.x;
             const dy = playerY - animal.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
             
-            let newX = animal.x;
-            let newY = animal.y;
-            
-            if (Math.abs(dx) > Math.abs(dy)) {
-                newX += dx > 0 ? 1 : -1;
-            } else {
-                newY += dy > 0 ? 1 : -1;
-            }
-
-            if (newX >= 0 && newX < world[0].length &&
-                newY >= 0 && newY < world.length &&
-                world[newY][newX] !== '🌊' &&
-                world[newY][newX] !== '⛰️') {
-                animal.x = newX;
-                animal.y = newY;
+            if (distance > COLLISION_CONFIG.RADIUS) {  // Only move if not already colliding
+                const moveX = (dx / distance) * speed * timeScale;
+                const moveY = (dy / distance) * speed * timeScale;
+                
+                const newX = animal.x + moveX;
+                const newY = animal.y + moveY;
+                
+                // Check if new position is valid
+                const gridX = Math.floor(newX);
+                const gridY = Math.floor(newY);
+                
+                if (gridX >= 0 && gridX < world[0].length &&
+                    gridY >= 0 && gridY < world.length &&
+                    world[gridY][gridX] !== '🌊' &&
+                    world[gridY][gridX] !== '⛰️') {
+                    animal.x = newX;
+                    animal.y = newY;
+                }
             }
         }
     }
@@ -366,33 +473,53 @@ export function gainXP(amount: number, fromBoss = false) {
     }
 }
 
-// Update swordAttack to include level bonus and grant XP
+// Update sword attack to be radius-based from player position
+export function startSwordAnimation(playerX: number, playerY: number) {
+    const ATTACK_POINTS = 8;  // Number of animation points around the player
+    const ATTACK_RADIUS = 1.5;  // Distance from player
+    
+    for (let i = 0; i < ATTACK_POINTS; i++) {
+        const angle = (i * 2 * Math.PI) / ATTACK_POINTS;
+        const x = playerX + Math.cos(angle) * ATTACK_RADIUS;
+        const y = playerY + Math.sin(angle) * ATTACK_RADIUS;
+        
+        const animationSymbol = ATTACK_ANIMATIONS[Math.min(playerLevel - 1, ATTACK_ANIMATIONS.length - 1)];
+        
+        currentAnimations.push({
+            id: nextAnimationId++,
+            type: 'sword',
+            x,
+            y,
+            duration: 250 + (playerLevel - 1) * 25,
+            startTime: Date.now(),
+            symbol: animationSymbol
+        });
+    }
+}
+
+// Update swordAttack to match the new animation style
 export function swordAttack(world: TerrainType[][], playerX: number, playerY: number) {
     const totalDamage = SWORD_DAMAGE + (playerLevel - 1) * XP_CONFIG.DAMAGE_PER_LEVEL;
+    const ATTACK_RADIUS = 1.5;  // Match the animation radius
 
-    for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-            const targetX = playerX + dx;
-            const targetY = playerY + dy;
+    // Check all monsters within attack radius
+    for (let i = animals.length - 1; i >= 0; i--) {
+        const target = animals[i];
+        const dx = target.x - playerX;
+        const dy = target.y - playerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance <= ATTACK_RADIUS) {
+            target.health -= totalDamage;
             
-            const targetIndex = animals.findIndex(a => 
-                a.x === targetX && a.y === targetY
-            );
-            
-            if (targetIndex !== -1) {
-                const target = animals[targetIndex];
-                target.health -= totalDamage;
-                
-                if (target.health <= 0) {
-                    // Find the enemy type to get XP value
-                    const enemyType = Object.values(ENEMY_TYPES).find(
-                        type => type.symbol === target.symbol
-                    );
-                    if (enemyType) {
-                        gainXP(enemyType.xp, target.isBoss);
-                    }
-                    animals.splice(targetIndex, 1);
+            if (target.health <= 0) {
+                const enemyType = Object.values(ENEMY_TYPES).find(
+                    type => type.symbol === target.symbol
+                );
+                if (enemyType) {
+                    gainXP(enemyType.xp, target.isBoss);
                 }
+                animals.splice(i, 1);
             }
         }
     }
@@ -408,18 +535,6 @@ export function healPlayer(amount: number) {
     const maxHealth = getMaxHealth();
     const newHealth = Math.min(maxHealth, playerHealth + amount);
     playerHealth = newHealth;
-}
-
-// Add a function to check for enemy collisions consistently
-export function checkEnemyCollision(playerX: number, playerY: number): boolean {
-    const collidingAnimal = animals.find(a => 
-        a.x === playerX && a.y === playerY
-    );
-    
-    if (collidingAnimal) {
-        return damagePlayer(collidingAnimal.damage);
-    }
-    return false;
 }
 
 // Add these functions to manage player health
@@ -476,26 +591,7 @@ export function resetGame() {
     lastMonsterSpawn = Date.now();
     currentAnimations = [];
     nextAnimationId = 0;
-}
-
-// Update startSwordAnimation to use level-based effects
-export function startSwordAnimation(x: number, y: number, direction: 'up' | 'down' | 'left' | 'right' | 'all') {
-    // Get animation based on player level (1-based index)
-    const animationSymbol = ATTACK_ANIMATIONS[Math.min(playerLevel - 1, ATTACK_ANIMATIONS.length - 1)];
-    
-    // Make animations last longer at higher levels
-    const baseDuration = 250;
-    const levelDurationBonus = (playerLevel - 1) * 25; // +25ms per level
-    
-    currentAnimations.push({
-        id: nextAnimationId++,
-        type: 'sword',
-        x,
-        y,
-        duration: baseDuration + levelDurationBonus,
-        startTime: Date.now(),
-        symbol: animationSymbol
-    });
+    monsterStates.clear();
 }
 
 // Update clearAnimation to remove finished animations

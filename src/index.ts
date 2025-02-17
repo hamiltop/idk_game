@@ -29,7 +29,12 @@ import {
     STAMINA_CONFIG,
     useStamina,
     regenStamina,
-    getMaxHealth
+    getMaxHealth,
+    MOVEMENT_CONFIG,
+    PlayerPosition,
+    playerPosition,
+    setPlayerPosition,
+    movePlayer
 } from './shared';
 
 class Game {
@@ -41,6 +46,12 @@ class Game {
     private currentY: number;
     private isGameOver = false;
     private isSprinting = false;
+    private keyStates: { [key: string]: boolean } = {};
+    private lastFrameTime: number = 0;
+    private lastPlayerGridX: number = 0;
+    private lastPlayerGridY: number = 0;
+    private viewportX: number = 0;  // Smooth viewport position
+    private viewportY: number = 0;
     
     constructor() {
         this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -54,6 +65,7 @@ class Game {
         
         this.setupKeyboardHandlers();
         this.init();
+        this.lastFrameTime = performance.now();
     }
     
     private init() {
@@ -65,6 +77,11 @@ class Game {
         const startPos = this.findSafeStartPosition();
         this.currentX = startPos.x;
         this.currentY = startPos.y;
+        this.viewportX = this.currentX;
+        this.viewportY = this.currentY;
+        setPlayerPosition(this.currentX + 10, this.currentY + 10);
+        this.lastPlayerGridX = Math.floor(playerPosition.x);
+        this.lastPlayerGridY = Math.floor(playerPosition.y);
         this.startGameLoop();
     }
     
@@ -77,29 +94,31 @@ class Game {
                 return;
             }
 
-            // Add shift key for sprint
             if (event.key === 'Shift') {
                 this.isSprinting = true;
             }
 
-            switch(event.key) {
-                case 'ArrowUp':
-                case 'ArrowDown':
-                case 'ArrowLeft':
-                case 'ArrowRight':
-                case 'f':
-                case ' ':
-                    event.preventDefault();
-                    this.handleInput(event.key);
-                    break;
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+                event.preventDefault();
+                this.keyStates[event.key] = true;
+            }
+
+            if (event.key === 'f') {
+                event.preventDefault();
+                this.handleAttack();
+            }
+            if (event.key === ' ') {
+                event.preventDefault();
+                this.keyStates[' '] = true;  // Track spacebar state
+                moveAnimals(this.world, Math.floor(playerPosition.x), Math.floor(playerPosition.y));
             }
         });
 
-        // Add keyup handler for shift
         document.addEventListener('keyup', (event) => {
             if (event.key === 'Shift') {
                 this.isSprinting = false;
             }
+            this.keyStates[event.key] = false;
         });
     }
     
@@ -109,16 +128,37 @@ class Game {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.font = `${this.tileSize}px Arial`;  // Ensure font size is set
         
-        // Draw terrain
-        for (let y = this.currentY; y < this.currentY + 20; y++) {
-            for (let x = this.currentX; x < this.currentX + 20; x++) {
-                const screenX = (x - this.currentX) * this.tileSize;
-                const screenY = (y - this.currentY) * this.tileSize;
+        // Smoothly update viewport position
+        const targetViewportX = Math.floor(playerPosition.x) - Math.floor(20 / 2);
+        const targetViewportY = Math.floor(playerPosition.y) - Math.floor(20 / 2);
+        
+        // Lerp viewport position
+        const lerpFactor = 0.1;
+        this.viewportX += (targetViewportX - this.viewportX) * lerpFactor;
+        this.viewportY += (targetViewportY - this.viewportY) * lerpFactor;
+
+        // Draw terrain using smoothed viewport
+        for (let y = Math.floor(this.viewportY); y < Math.floor(this.viewportY) + 21; y++) {
+            for (let x = Math.floor(this.viewportX); x < Math.floor(this.viewportX) + 21; x++) {
+                const screenX = (x - this.viewportX) * this.tileSize;
+                const screenY = (y - this.viewportY) * this.tileSize;
                 
                 if (y >= 0 && y < this.world.length && x >= 0 && x < this.world[0].length) {
-                    // Draw terrain
+                    const terrain = TERRAIN_TYPES[this.world[y][x]];
+                    
+                    // Fill background
+                    this.ctx.fillStyle = terrain.backgroundColor;
+                    this.ctx.fillRect(
+                        screenX, 
+                        screenY, 
+                        this.tileSize, 
+                        this.tileSize
+                    );
+                    
+                    // Draw terrain emoji
+                    this.ctx.fillStyle = 'black';  // Reset fillStyle for text
                     this.ctx.fillText(
-                        TERRAIN_TYPES[this.world[y][x]].symbol,
+                        terrain.symbol,
                         screenX,
                         screenY + this.tileSize
                     );
@@ -128,26 +168,46 @@ class Game {
                     if (food) {
                         this.ctx.fillText(food.symbol, screenX, screenY + this.tileSize);
                     }
-                    
-                    // Draw animals
-                    const animal = animals.find(a => a.x === x && a.y === y);
-                    if (animal) {
-                        this.ctx.fillText(animal.symbol, screenX, screenY + this.tileSize);
-                    }
                 }
             }
         }
+
+        // Draw all animals with their exact positions
+        for (const animal of animals) {
+            const screenX = (animal.x - this.viewportX) * this.tileSize;
+            const screenY = (animal.y - this.viewportY) * this.tileSize;
+            
+            // Only draw if within viewport bounds
+            if (screenX >= -this.tileSize && screenX <= this.canvas.width + this.tileSize &&
+                screenY >= -this.tileSize && screenY <= this.canvas.height + this.tileSize) {
+                this.ctx.fillText(animal.symbol, screenX, screenY + this.tileSize);
+            }
+        }
+
+        // Draw player with smooth position and outline
+        const screenX = (playerPosition.x - this.viewportX) * this.tileSize;
+        const screenY = (playerPosition.y - this.viewportY) * this.tileSize;
         
-        // Draw player
-        const playerScreenX = Math.floor(20 / 2) * this.tileSize;
-        const playerScreenY = Math.floor(20 / 2) * this.tileSize;
-        this.ctx.fillText('👤', playerScreenX, playerScreenY + this.tileSize);
+        // Draw player sprite with outline
+        const PLAYER_SPRITE = '🧙';  // Change to wizard/mage character
+        const OUTLINE_COLOR = 'white';
+        const OUTLINE_WIDTH = 2;
+
+        // Draw outline
+        this.ctx.save();
+        this.ctx.strokeStyle = OUTLINE_COLOR;
+        this.ctx.lineWidth = OUTLINE_WIDTH;
+        this.ctx.strokeText(PLAYER_SPRITE, screenX, screenY + this.tileSize);
+        
+        // Draw player sprite
+        this.ctx.fillText(PLAYER_SPRITE, screenX, screenY + this.tileSize);
+        this.ctx.restore();
         
         // Draw current animations
         for (const animation of currentAnimations) {
             // Convert world coordinates to screen coordinates
-            const screenX = (animation.x - this.currentX) * this.tileSize;
-            const screenY = (animation.y - this.currentY) * this.tileSize;
+            const screenX = (animation.x - this.viewportX) * this.tileSize;
+            const screenY = (animation.y - this.viewportY) * this.tileSize;
             
             // Only draw if the animation is within the viewport
             if (screenX >= 0 && screenX < this.canvas.width && 
@@ -193,104 +253,115 @@ class Game {
     }
     
     private startGameLoop() {
-        const gameLoop = () => {
+        const gameLoop = (currentTime: number) => {
             if (!this.isGameOver) {
+                const deltaTime = currentTime - this.lastFrameTime;
+                this.lastFrameTime = currentTime;
+
+                this.updateMovement(deltaTime);
+                // Update monsters every frame with the same deltaTime
+                moveAnimals(this.world, playerPosition.x, playerPosition.y, deltaTime);
                 handleRespawns(this.world);
                 this.render();
             }
             requestAnimationFrame(gameLoop);
         };
         
-        gameLoop();
+        requestAnimationFrame(gameLoop);
     }
     
-    private handleInput(key: string) {
+    private updateMovement(deltaTime: number) {
         if (this.isGameOver) return;
 
-        let newX = this.currentX;
-        let newY = this.currentY;
-        const playerX = this.currentX + Math.floor(20 / 2);
-        const playerY = this.currentY + Math.floor(20 / 2);
-
-        // Calculate movement speed
-        let moveCount = 1;
-        if (this.isSprinting && useStamina(STAMINA_CONFIG.SPRINT_COST)) {
-            moveCount = 2;  // Move 2 tiles when sprinting
-        } else if (!this.isSprinting) {
-            regenStamina();  // Only regenerate stamina when not sprinting and monsters are moving
+        // Calculate base speed and check if we can sprint
+        let speed = MOVEMENT_CONFIG.BASE_SPEED * (deltaTime / 16.67); // Normalize to 60fps
+        
+        // Only try to sprint if shift is held and we're actually moving
+        const isMoving = Object.values(this.keyStates).some(state => state);
+        if (this.isSprinting && isMoving) {
+            if (useStamina(STAMINA_CONFIG.SPRINT_COST * (deltaTime / 1000))) { // Scale cost with time
+                speed *= MOVEMENT_CONFIG.SPRINT_MULTIPLIER;
+            }
+        } else if (!this.isSprinting && (isMoving || this.keyStates[' '])) {  // Regenerate when moving or holding space
+            regenStamina();
         }
 
-        switch(key) {
-            case 'ArrowUp':
-                if (playerY > 0) newY -= moveCount;
-                break;
-            case 'ArrowDown':
-                if (playerY < this.world.length - 1) newY += moveCount;
-                break;
-            case 'ArrowLeft':
-                if (playerX > 0) newX -= moveCount;
-                break;
-            case 'ArrowRight':
-                if (playerX < this.world[0].length - 1) newX += moveCount;
-                break;
-            case 'f':
-                // Show sword animations in all 8 directions around player
-                for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                        if (dx === 0 && dy === 0) continue; // Skip player's position
-                        startSwordAnimation(
-                            playerX + dx,
-                            playerY + dy,
-                            'all'  // New direction type for multi-directional attack
-                        );
-                    }
-                }
-                
-                swordAttack(this.world, playerX, playerY);
-                moveAnimals(this.world, playerX, playerY);
-                if (checkEnemyCollision(playerX, playerY)) {
-                    this.handleGameOver();
-                }
-                break;
-            case ' ':
-                moveAnimals(this.world, playerX, playerY);
-                if (checkEnemyCollision(playerX, playerY)) {
-                    this.handleGameOver();
-                }
-                break;
+        let dx = 0;
+        let dy = 0;
+
+        if (this.keyStates['ArrowUp']) dy -= speed;
+        if (this.keyStates['ArrowDown']) dy += speed;
+        if (this.keyStates['ArrowLeft']) dx -= speed;
+        if (this.keyStates['ArrowRight']) dx += speed;
+
+        // Normalize diagonal movement
+        if (dx !== 0 && dy !== 0) {
+            const factor = 1 / Math.sqrt(2);
+            dx *= factor;
+            dy *= factor;
         }
 
-        if (key !== 'f' && key !== ' ') {
-            const newPlayerX = newX + Math.floor(20 / 2);
-            const newPlayerY = newY + Math.floor(20 / 2);
+        // Calculate new position
+        const newX = playerPosition.x + dx;
+        const newY = playerPosition.y + dy;
 
-            if (this.world[newPlayerY][newPlayerX] !== '🌊' && 
-                this.world[newPlayerY][newPlayerX] !== '⛰️') {
-                this.currentX = newX;
-                this.currentY = newY;
+        // Check collision with terrain
+        const gridX = Math.floor(newX);
+        const gridY = Math.floor(newY);
 
-                // Check for collisions at new position
-                if (checkEnemyCollision(newPlayerX, newPlayerY)) {
+        if (gridX >= 0 && gridX < this.world[0].length &&
+            gridY >= 0 && gridY < this.world.length &&
+            this.world[gridY][gridX] !== '🌊' &&
+            this.world[gridY][gridX] !== '⛰️') {
+            
+            movePlayer(dx, dy);
+
+            // Check for collisions with current position
+            if (checkEnemyCollision(playerPosition.x, playerPosition.y)) {
+                this.handleGameOver();
+                return;
+            }
+
+            // Check if player has moved to a new grid position
+            const currentGridX = Math.floor(playerPosition.x);
+            const currentGridY = Math.floor(playerPosition.y);
+            
+            if (currentGridX !== this.lastPlayerGridX || currentGridY !== this.lastPlayerGridY) {
+                // Move monsters only when player changes grid position
+                moveAnimals(this.world, playerPosition.x, playerPosition.y, deltaTime);
+                if (checkEnemyCollision(currentGridX, currentGridY)) {
                     this.handleGameOver();
                     return;
                 }
-
-                // Check for food
-                const foodIndex = foods.findIndex(f => 
-                    f.x === newPlayerX && f.y === newPlayerY
-                );
-                if (foodIndex !== -1) {
-                    healPlayer(foods[foodIndex].healAmount);
-                    foods.splice(foodIndex, 1);
-                }
-
-                // Move animals and check for collisions again
-                moveAnimals(this.world, newPlayerX, newPlayerY);
-                if (checkEnemyCollision(newPlayerX, newPlayerY)) {
-                    this.handleGameOver();
-                }
+                
+                this.lastPlayerGridX = currentGridX;
+                this.lastPlayerGridY = currentGridY;
             }
+
+            // Check for food with radius-based collision
+            const PICKUP_RADIUS = 0.5;  // Half a tile radius for pickup
+            const foodIndex = foods.findIndex(f => {
+                const foodDx = f.x - playerPosition.x;
+                const foodDy = f.y - playerPosition.y;
+                const distance = Math.sqrt(foodDx * foodDx + foodDy * foodDy);
+                return distance < PICKUP_RADIUS;
+            });
+
+            if (foodIndex !== -1) {
+                healPlayer(foods[foodIndex].healAmount);
+                foods.splice(foodIndex, 1);
+            }
+
+            // Update viewport target position
+            this.currentX = Math.floor(playerPosition.x) - Math.floor(20 / 2);
+            this.currentY = Math.floor(playerPosition.y) - Math.floor(20 / 2);
         }
+    }
+
+    private handleAttack() {
+        // Attack at player's exact position
+        startSwordAnimation(playerPosition.x, playerPosition.y);
+        swordAttack(this.world, playerPosition.x, playerPosition.y);
     }
     
     private findSafeStartPosition(): { x: number, y: number } {
