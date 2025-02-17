@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -18,7 +21,7 @@ jobs:
           node-version: '16'
 
       - name: Install dependencies
-        run: npm ci  # Use ci instead of install for cleaner builds
+        run: npm ci
 
       - name: Create dist directory
         run: mkdir -p dist
@@ -30,4 +33,5 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@4.1.4
         with:
           branch: gh-pages
-          folder: dist 
+          folder: dist
+          token: ${{ secrets.GITHUB_TOKEN }} 
