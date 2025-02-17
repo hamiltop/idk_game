@@ -562,7 +562,7 @@ var Game = class {
     };
     updateCanvasSize();
     window.addEventListener("resize", updateCanvasSize);
-    this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    this.isMobile = "ontouchstart" in window || navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     if (this.isMobile) {
       this.setupMobileControls();
     }
@@ -1016,48 +1016,79 @@ var Game = class {
   handleGameOver() {
     this.isGameOver = true;
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.fillStyle = "white";
-    this.ctx.font = "48px Arial";
-    this.ctx.textAlign = "center";
-    this.ctx.fillText("Game Over!", this.canvas.width / 2, this.canvas.height / 2);
-    this.ctx.font = "24px Arial";
+    const gameOverContainer = document.createElement("div");
+    gameOverContainer.id = "gameOverContainer";
+    document.body.appendChild(gameOverContainer);
+    const gameOverMessage = document.createElement("div");
+    gameOverMessage.id = "gameOverMessage";
+    gameOverMessage.textContent = "Game Over!";
+    gameOverContainer.appendChild(gameOverMessage);
+    const style = document.createElement("style");
+    style.textContent = `
+            #gameOverContainer {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 20px;
+                background: rgba(0, 0, 0, 0.8);
+                z-index: 2000;
+            }
+
+            #gameOverMessage {
+                font-size: 48px;
+                color: white;
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+                font-family: Arial, sans-serif;
+            }
+
+            #restartButton {
+                padding: 15px 30px;
+                font-size: 24px;
+                background: rgba(255, 255, 255, 0.2);
+                border: 2px solid white;
+                border-radius: 10px;
+                color: white;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+                transition: all 0.2s;
+            }
+
+            #restartButton:active {
+                background: rgba(255, 255, 255, 0.4);
+                transform: scale(0.95);
+            }
+        `;
+    document.head.appendChild(style);
     if (this.isMobile) {
       const restartButton = document.createElement("button");
       restartButton.id = "restartButton";
       restartButton.textContent = "\u{1F504} Restart";
-      document.body.appendChild(restartButton);
-      const style = document.createElement("style");
-      style.textContent = `
-                #restartButton {
-                    position: fixed;
-                    left: 50%;
-                    top: 60%;
-                    transform: translate(-50%, -50%);
-                    padding: 15px 30px;
-                    font-size: 24px;
-                    background: rgba(255, 255, 255, 0.2);
-                    border: 2px solid white;
-                    border-radius: 10px;
-                    color: white;
-                    cursor: pointer;
-                    -webkit-tap-highlight-color: transparent;
-                    transition: background-color 0.2s;
-                }
-                #restartButton:active {
-                    background: rgba(255, 255, 255, 0.4);
-                }
-            `;
-      document.head.appendChild(style);
+      gameOverContainer.appendChild(restartButton);
       restartButton.addEventListener("touchstart", (e) => {
         e.preventDefault();
-        restartButton.remove();
+        gameOverContainer.remove();
+        this.restart();
+      });
+      restartButton.addEventListener("click", (e) => {
+        e.preventDefault();
+        gameOverContainer.remove();
         this.restart();
       });
     } else {
-      this.ctx.fillText("Press R to restart", this.canvas.width / 2, this.canvas.height / 2 + 40);
+      const keyboardInstructions = document.createElement("div");
+      keyboardInstructions.textContent = "Press R to restart";
+      keyboardInstructions.style.cssText = "color: white; font-size: 24px;";
+      gameOverContainer.appendChild(keyboardInstructions);
       const restartHandler = (event) => {
         if (event.key === "r" || event.key === "R") {
           document.removeEventListener("keydown", restartHandler);
+          gameOverContainer.remove();
           this.restart();
         }
       };
@@ -1065,9 +1096,9 @@ var Game = class {
     }
   }
   restart() {
-    const restartButton = document.getElementById("restartButton");
-    if (restartButton) {
-      restartButton.remove();
+    const gameOverContainer = document.getElementById("gameOverContainer");
+    if (gameOverContainer) {
+      gameOverContainer.remove();
     }
     this.isGameOver = false;
     resetGame();
