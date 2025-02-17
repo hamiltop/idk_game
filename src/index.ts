@@ -665,22 +665,69 @@ class Game {
         this.ctx.textAlign = 'center';
         this.ctx.fillText('Game Over!', this.canvas.width / 2, this.canvas.height / 2);
         
+        // Show different restart instructions based on device
         this.ctx.font = '24px Arial';
-        this.ctx.fillText('Press R to restart', this.canvas.width / 2, this.canvas.height / 2 + 40);
-        
-        // Add restart handler
-        const restartHandler = (event: KeyboardEvent) => {
-            if (event.key === 'r' || event.key === 'R') {
-                document.removeEventListener('keydown', restartHandler);
+        if (this.isMobile) {
+            // Create restart button for mobile
+            const restartButton = document.createElement('button');
+            restartButton.id = 'restartButton';
+            restartButton.textContent = '🔄 Restart';
+            document.body.appendChild(restartButton);
+
+            // Add styles for the restart button
+            const style = document.createElement('style');
+            style.textContent = `
+                #restartButton {
+                    position: fixed;
+                    left: 50%;
+                    top: 60%;
+                    transform: translate(-50%, -50%);
+                    padding: 15px 30px;
+                    font-size: 24px;
+                    background: rgba(255, 255, 255, 0.2);
+                    border: 2px solid white;
+                    border-radius: 10px;
+                    color: white;
+                    cursor: pointer;
+                    -webkit-tap-highlight-color: transparent;
+                    transition: background-color 0.2s;
+                }
+                #restartButton:active {
+                    background: rgba(255, 255, 255, 0.4);
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Add touch handler
+            restartButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                // Remove button before restart
+                restartButton.remove();
                 this.restart();
-            }
-        };
-        document.addEventListener('keydown', restartHandler);
+            });
+        } else {
+            this.ctx.fillText('Press R to restart', this.canvas.width / 2, this.canvas.height / 2 + 40);
+            
+            // Add keyboard handler for desktop
+            const restartHandler = (event: KeyboardEvent) => {
+                if (event.key === 'r' || event.key === 'R') {
+                    document.removeEventListener('keydown', restartHandler);
+                    this.restart();
+                }
+            };
+            document.addEventListener('keydown', restartHandler);
+        }
     }
 
     private restart() {
+        // Remove restart button if it exists
+        const restartButton = document.getElementById('restartButton');
+        if (restartButton) {
+            restartButton.remove();
+        }
+        
         this.isGameOver = false;
-        resetGame();  // Use the new reset function instead of directly modifying playerHealth
+        resetGame();
         this.init();
     }
 }
