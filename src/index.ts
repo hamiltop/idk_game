@@ -55,7 +55,7 @@ class Game {
     private isMobile: boolean;
     private touchStartPos: { x: number, y: number } | null = null;
     private joystickPos: { x: number, y: number } | null = null;
-    private attackButton: HTMLButtonElement;
+    private attackButton!: HTMLButtonElement; // Use definite assignment assertion
     
     constructor() {
         this.canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -411,7 +411,7 @@ class Game {
                     );
 
                     // Add flash effect for player damage
-                    if (animation.type === 'playerDamage') {
+                    if (animation.type === 'playerDamage' && animation.color) {
                         this.ctx.fillStyle = animation.color;
                         this.ctx.globalAlpha = alpha * 0.3;
                         this.ctx.fillRect(
@@ -464,11 +464,10 @@ class Game {
 
         // Draw joystick if active
         if (this.isMobile && this.touchStartPos && this.joystickPos) {
-            const joystickArea = document.getElementById('joystickArea')!;
+            const joystickArea = document.getElementById('joystickArea') as HTMLCanvasElement; // Add type assertion
             const ctx = joystickArea.getContext('2d')!;
             ctx.clearRect(0, 0, joystickArea.width, joystickArea.height);
             
-            // Draw joystick position
             ctx.beginPath();
             ctx.arc(this.joystickPos.x, this.joystickPos.y, 20, 0, Math.PI * 2);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
