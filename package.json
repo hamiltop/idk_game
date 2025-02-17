@@ -7,8 +7,8 @@
     "ts-cli": "./dist/index.js"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --outfile=dist/index.js",
-    "start": "node dist/index.js",
+    "build": "tsc && cp index.html dist/",
+    "start": "tsc -w",
     "dev": "esbuild src/index.ts --bundle --outfile=dist/index.js --watch --servedir=.",
     "cli": "ts-node src/cli.ts"
   },
@@ -19,6 +19,6 @@
     "@types/node": "^20.11.24",
     "esbuild": "^0.19.11",
     "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "typescript": "^4.9.5"
   }
 } 
