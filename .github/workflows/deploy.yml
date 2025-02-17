@@ -18,10 +18,13 @@ jobs:
           node-version: '16'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci  # Use ci instead of install for cleaner builds
+
+      - name: Create dist directory
+        run: mkdir -p dist
 
       - name: Build
-        run: npm run build
+        run: npx esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm && cp index.html dist/
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@4.1.4

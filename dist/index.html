@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: #000;
+            touch-action: none;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #gameCanvas {
+            background: #111;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            image-rendering: pixelated;
+        }
+
+        #stats {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        @media (max-width: 768px) {
+            #stats {
+                font-size: 12px;
+                padding: 5px;
+            }
+            
+            #gameCanvas {
+                max-height: calc(100vh - 180px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    <div id="stats">
+        <div>Health: <span id="healthValue">100</span></div>
+        <div>Level: <span id="levelValue">1</span></div>
+        <div>Rank: <span id="rankValue">Novice</span></div>
+        <div>XP: <span id="xpValue">0</span>/<span id="xpNeeded">100</span></div>
+        <div>Damage: <span id="damageValue">35</span></div>
+        <div>Stamina: <span id="staminaValue">100</span></div>
+    </div>
+    <script type="module" src="./index.js"></script>
+</body>
+</html> 
